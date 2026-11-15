@@ -6,4 +6,4 @@ cd ../
 
 cd physics/
 call build.bat
-cd../
+cd ../

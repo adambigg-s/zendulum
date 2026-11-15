@@ -1,31 +1,26 @@
 const std = @import("std");
-const process = std.process;
-const Io = std.Io;
-
 const physics = @import("physics");
+const tensor = @import("tensor.zig");
+
+const net = std.Io.net;
+const process = std.process;
+const debug = std.debug;
 
 pub fn main(init: process.Init) !void {
-    const io = init.io;
-
-    const local_addr = try std.Io.net.IpAddress.parse("0.0.0.0", 0);
-    var socket = try local_addr.bind(io, .{
+    const address = try net.IpAddress.parse("0.0.0.0", 0);
+    var socket = try address.bind(init.io, .{
         .mode = .dgram,
         .protocol = .udp,
     });
+    defer socket.close(init.io);
 
-    defer socket.close(io);
+    const dest_address = try net.IpAddress.parse("127.0.0.1", 6767);
 
-    const dest_addr = try std.Io.net.IpAddress.parse("127.0.0.1", 6767);
+    try socket.send(init.io, &dest_address, "Did this was recv???");
 
-    const message = "Did this was recv???";
-
-    try socket.send(io, &dest_addr, message);
-
-    var i: i32 = 0;
-    while (i < 10_000) {
-        try socket.send(io, &dest_addr, "SHUTDOWN");
-        i += 1;
-    }
+    const mat = try tensor.Tensor(f32).init(init.gpa, &[_]usize{ 2, 2 });
+    defer mat.deinit();
+    debug.print("{f}\n", .{mat});
 
     // // Prints to stderr, unbuffered, ignoring potential errors.
     // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
@@ -62,33 +57,33 @@ test "simple test" {
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
 
-test "fuzz example" {
-    try std.testing.fuzz({}, testOne, .{});
-}
+// test "fuzz example" {
+//     try std.testing.fuzz({}, testOne, .{});
+// }
 
-fn testOne(context: void, smith: *std.testing.Smith) !void {
-    _ = context;
-    // Try command `zig build test --fuzz -Doptimize=ReleaseFast` to see if it manages to fail this test case!
+// fn testOne(context: void, smith: *std.testing.Smith) !void {
+//     _ = context;
+//     // Try command `zig build test --fuzz -Doptimize=ReleaseFast` to see if it manages to fail this test case!
 
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(u8) = .empty;
-    defer list.deinit(gpa);
-    while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
-        .add_data => {
-            const slice = try list.addManyAsSlice(gpa, smith.value(u4));
-            smith.bytes(slice);
-        },
-        .dup_data => {
-            if (list.items.len == 0) continue;
-            if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
-            const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
-            const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
-            try list.appendSlice(gpa, list.items[off..][0..len]);
-            try std.testing.expectEqualSlices(
-                u8,
-                list.items[off..][0..len],
-                list.items[list.items.len - len ..],
-            );
-        },
-    };
-}
+//     const gpa = std.testing.allocator;
+//     var list: std.ArrayList(u8) = .empty;
+//     defer list.deinit(gpa);
+//     while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
+//         .add_data => {
+//             const slice = try list.addManyAsSlice(gpa, smith.value(u4));
+//             smith.bytes(slice);
+//         },
+//         .dup_data => {
+//             if (list.items.len == 0) continue;
+//             if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
+//             const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
+//             const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
+//             try list.appendSlice(gpa, list.items[off..][0..len]);
+//             try std.testing.expectEqualSlices(
+//                 u8,
+//                 list.items[off..][0..len],
+//                 list.items[list.items.len - len ..],
+//             );
+//         },
+//     };
+// }
