@@ -19,7 +19,7 @@ const SHUTDOWN: &[u8] = "SHUTDOWN".as_bytes();
 const BUFFER_SIZE: usize = u16::MAX as usize;
 const FPS: f32 = 240f32;
 const POLL_RATE: f32 = time::Duration::from_secs(1).as_millis() as f32 / FPS;
-const BACKGROUND_COLOR: u32 = 0xffu32 << 24 | 25u32 << 16 | 25u32 << 8 | 40u32;
+const BACKGROUND_COLOR: u32 = 0xffu32 << 24 | 180u32 << 16 | 180u32 << 8 | 180u32;
 
 struct SimulationState
 {
@@ -42,9 +42,9 @@ impl SimulationState
 
      fn update_pendulum(&mut self)
      {
-          let pivot = glam::Mat4::from_translation(glam::Vec3::ZERO);
           let swing = glam::Mat4::from_rotation_z(self.state.theta1 as f32);
           let length = self.bodies[1].size.y;
+          let pivot = glam::Mat4::from_translation(glam::vec3(0.0, -length * 0.5, 0.0));
 
           self.bodies[0].transform = pivot;
           self.bodies[1].transform =
@@ -178,11 +178,11 @@ fn main() -> anyhow::Result<()>
           }
           if window.is_key_down(minifb::Key::A)
           {
-               state.camera.yaw += 1.0;
+               state.camera.yaw -= 1.0;
           }
           if window.is_key_down(minifb::Key::D)
           {
-               state.camera.yaw -= 1.0;
+               state.camera.yaw += 1.0;
           }
           if window.is_key_down(minifb::Key::R)
           {

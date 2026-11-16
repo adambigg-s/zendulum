@@ -2,6 +2,7 @@ const std = @import("std");
 const physics = @import("physics");
 const tensor = @import("tensor.zig");
 const rk4 = @import("integrator.zig");
+const pend = @import("pendulum.zig");
 
 const net = std.Io.net;
 const math = std.math;
@@ -28,7 +29,7 @@ pub fn main(init: process.Init) !void {
     var rng = std.Random.DefaultPrng.init(0);
 
     var i: i32 = 0;
-    while (i < 1000) {
+    while (i < 100) {
         try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{ std.Random.float(rng.random(), f64) * math.tau, std.Random.float(rng.random(), f64), 3.0, 4.0 }));
         i += 1;
         try init.io.sleep(.fromMilliseconds(12), .awake);
@@ -38,8 +39,11 @@ pub fn main(init: process.Init) !void {
     defer mat.deinit();
     debug.print("{f}\n", .{mat});
 
-    const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
+    // const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
+    const pendulum = pend.SinglePendulum{ .length = 2.0, .mass = 5.0, .gravity = 9.81 };
+    var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(pendulum, mat, 0.1);
     defer integ.deinit();
+    _ = try integ.step();
     debug.print("{any}", .{integ});
 
     // // Prints to stderr, unbuffered, ignoring potential errors.

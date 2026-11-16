@@ -23,7 +23,7 @@ pub fn Tensor(comptime T: type) type {
             for (shape) |dimension| {
                 size *= dimension;
             }
-            const data = try alloc.alloc(T, size);
+            const m_data = try alloc.alloc(T, size);
 
             var strides = try alloc.alloc(usize, dim);
             var acc: usize = 1;
@@ -38,27 +38,35 @@ pub fn Tensor(comptime T: type) type {
                 ._dim = dim,
                 ._shape = m_shape,
                 ._strides = strides,
-                ._data = data,
+                ._data = m_data,
                 ._alloc = alloc,
             };
         }
 
         pub fn initZeros(alloc: mem.Allocator, shape: []const usize) !Self {
             var out = try Self.init(alloc, shape);
-            @memset(&out._data, mem.zeroes(T));
+            out.fill(0);
             return out;
         }
 
         pub fn initOnes(alloc: mem.Allocator, shape: []const usize) !Self {
             var out = try Self.init(alloc, shape);
-            @memset(&out._data, 1);
+            out.fill(1);
             return out;
         }
 
-        pub fn initSplat(alloc: mem.Allocator, shape: []const usize, ele: T) !Self {
+        pub fn initSplat(alloc: mem.Allocator, shape: []const usize, val: T) !Self {
             var out = try Self.init(alloc, shape);
-            @memset(&out._data, ele);
+            out.fill(val);
             return out;
+        }
+
+        pub fn assign(self: Self, other: *const Self) void {
+            debug.assert(self.sameShape(other));
+
+            for (self._data, other._data) |*s, o| {
+                s.* = o;
+            }
         }
 
         pub fn clone(self: Self) !Self {
@@ -104,6 +112,51 @@ pub fn Tensor(comptime T: type) type {
         pub fn getPtr(self: Self, ind: []const usize) *T {
             return &self._data[self.offset(ind)];
         }
+
+        pub fn data(self: Self) []T {
+            return self._data;
+        }
+
+        pub fn fill(self: Self, val: T) void {
+            @memset(self._data, val);
+        }
+        // #endregion
+
+        // #region tensor & scalar
+
+        pub fn addScalar(self: *Self, scl: T) void {
+            for (self._data) |*dat| {
+                dat.* += scl;
+            }
+        }
+
+        pub fn subScalar(self: *Self, scl: T) void {
+            for (self._data) |*dat| {
+                dat.* -= scl;
+            }
+        }
+
+        pub fn mulScalar(self: *Self, scl: T) void {
+            for (self._data) |*dat| {
+                dat.* *= scl;
+            }
+        }
+
+        pub fn divScalar(self: *Self, scl: T) void {
+            for (self._data) |*dat| {
+                dat.* /= scl;
+            }
+        }
+        // #endregion
+
+        // #region tensor & tensor
+
+        pub fn addTensor(self: *Self, other: *const Self) void {
+            debug.assert(self.sameShape(&other));
+            for (self._data, other._data) |*s, o| {
+                s.* += o;
+            }
+        }
         // #endregion
 
         // #region private impl
@@ -125,6 +178,10 @@ pub fn Tensor(comptime T: type) type {
                 try self.mFormat(writer, dim + 1, off + i * self._strides[dim]);
             }
             try writer.writeAll("]");
+        }
+
+        fn sameShape(self: *const Self, other: *const Self) bool {
+            return mem.eql(usize, self._shape, other._shape);
         }
         // #endregion
     };

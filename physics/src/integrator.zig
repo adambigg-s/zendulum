@@ -1,27 +1,32 @@
+const std = @import("std");
 const tensor = @import("tensor.zig");
 
-pub fn Rk4Integrator(comptime T: type) type {
+const debug = std.debug;
+
+pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
     return struct {
+        _system: System,
         _state: tensor.Tensor(T),
         _t: T,
         _dt: T,
-        _ddt: *const fn (state: T) T,
         _tol: T,
 
         const Self = @This();
 
         // #region create/destroy
-        pub fn init(x0: tensor.Tensor(T), dt: T, ddt: *const fn (state: T) T) !Self {
+        pub fn init(system: System, x0: tensor.Tensor(T), dt: T) !Self {
+            debug.assert(x0._dim == 1);
+
             return .{
+                ._system = system,
                 ._state = try x0.clone(),
                 ._t = 0,
                 ._dt = dt,
-                ._ddt = ddt,
                 ._tol = 1e-9,
             };
         }
 
-        pub fn clone(self: Self) !Self {
+        pub fn clone(self: *const Self) !Self {
             var out = self;
             out._state = try self._state.clone();
             return out;
@@ -34,13 +39,17 @@ pub fn Rk4Integrator(comptime T: type) type {
 
         // #region public impl
 
-        pub fn step(self: Self) *const tensor.Tensor(T) {
+        pub fn state(self: *const Self) []const T {
+            return self._state._data;
+        }
+
+        pub fn step(self: *Self) !*const tensor.Tensor(T) {
             self._t += self._dt;
-            self._state = self.rk4();
+            try self.rk4();
             return &self._state;
         }
 
-        pub fn dynamicStep(self: Self) !*const tensor.Tensor(T) {
+        pub fn dynamicStep(self: *Self) !*const tensor.Tensor(T) {
             var oracle = try self.clone();
             oracle._dt /= 2;
         }
@@ -48,12 +57,31 @@ pub fn Rk4Integrator(comptime T: type) type {
 
         // #region private impl
 
-        // fn rk4(self: *const Self) tensor.Tensor(T) {
-        //     const k1 = self._ddt(self._state);
-        //     const k2 = self._ddt(self._state.add(k1) * tensor.Tensor(T).initSplat(self._state._alloc, self._state._shape, self._dt / 2));
-        //     const k3 = self._ddt(self._state.add(k2) * tensor.Tensor(T).initSplat(self._state._alloc, self._state._shape, self._dt / 2));
-        //     const k4 = self._ddt(self._state.add(k1) * tensor.Tensor(T).initSplat(self._state._alloc, self._state._shape, self._dt));
-        // }
+        fn rk4(self: *Self) !void {
+            var k1 = try self._state.clone();
+            defer k1.deinit();
+            var k2 = try self._state.clone();
+            defer k2.deinit();
+            var k3 = try self._state.clone();
+            defer k3.deinit();
+            var k4 = try self._state.clone();
+            defer k4.deinit();
+            var temp = try self._state.clone();
+
+            temp.assign(&self._state);
+            self._system.derivative(self._state._data, k1._data);
+
+            temp.assign(&self._state);
+            // k2
+
+            temp.assign(&self._state);
+            // k3
+
+            temp.assign(&self._state);
+            // k4
+
+            self._t += self._dt;
+        }
         // #endregion
     };
 }
