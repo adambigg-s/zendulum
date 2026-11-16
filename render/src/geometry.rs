@@ -11,8 +11,8 @@ pub struct SimpleVertex
 pub struct Cuboid
 {
      pub transform: glam::Mat4,
+     pub size: glam::Vec3,
      pub vertices: Vec<SimpleVertex>,
-     pub indices: Vec<u32>,
 }
 
 impl Cuboid
@@ -20,8 +20,20 @@ impl Cuboid
      pub fn new(color: glam::Vec3, scale: glam::Vec3) -> Self
      {
           let (raw_verts, raw_inds) = make_cuboid_parts(color);
-
-          todo!()
+          Self {
+               transform: glam::Mat4::IDENTITY,
+               size: scale,
+               vertices: raw_inds
+                    .iter()
+                    .map(|&ind| {
+                         SimpleVertex {
+                              pos: raw_verts[ind as usize].pos * scale,
+                              col: raw_verts[ind as usize].col,
+                              nor: raw_verts[ind as usize].nor,
+                         }
+                    })
+                    .collect(),
+          }
      }
 }
 

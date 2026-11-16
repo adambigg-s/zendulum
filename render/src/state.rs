@@ -17,7 +17,17 @@ impl State
                anyhow::bail!(
                     "Recv buffer too small: {} bytes\nExpected {} bytes",
                     size_of_val(buffer),
-                    size_of::<Self>() );
+                    size_of::<Self>()
+               );
+          }
+
+          if buffer.len() > size_of::<Self>()
+          {
+               log::warn!(
+                    "Recv buffer too alrge: {} bytes\nExpected {} bytes",
+                    size_of_val(buffer),
+                    size_of::<Self>()
+               );
           }
 
           bytemuck::try_pod_read_unaligned::<Self>(&buffer[0 .. size_of::<Self>()])

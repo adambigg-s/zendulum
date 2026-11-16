@@ -2,6 +2,7 @@ use std::env;
 
 use crossterm::terminal;
 
+#[derive(Debug, Default)]
 pub struct Setup;
 
 impl Setup

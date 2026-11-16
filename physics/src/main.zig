@@ -4,8 +4,10 @@ const tensor = @import("tensor.zig");
 const rk4 = @import("integrator.zig");
 
 const net = std.Io.net;
+const math = std.math;
 const process = std.process;
 const debug = std.debug;
+const mem = std.mem;
 
 fn ddtFn(in: f64) f64 {
     return in * 2;
@@ -22,6 +24,15 @@ pub fn main(init: process.Init) !void {
     const dest_address = try net.IpAddress.parse("127.0.0.1", 6767);
 
     try socket.send(init.io, &dest_address, "Did this was recv???");
+
+    var rng = std.Random.DefaultPrng.init(0);
+
+    var i: i32 = 0;
+    while (i < 1000) {
+        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{ std.Random.float(rng.random(), f64) * math.tau, std.Random.float(rng.random(), f64), 3.0, 4.0 }));
+        i += 1;
+        try init.io.sleep(.fromMilliseconds(12), .awake);
+    }
 
     const mat = try tensor.Tensor(f64).init(init.gpa, &[_]usize{ 2, 2 });
     defer mat.deinit();
