@@ -1,10 +1,15 @@
 const std = @import("std");
 const physics = @import("physics");
 const tensor = @import("tensor.zig");
+const rk4 = @import("integrator.zig");
 
 const net = std.Io.net;
 const process = std.process;
 const debug = std.debug;
+
+fn ddtFn(in: f64) f64 {
+    return in * 2;
+}
 
 pub fn main(init: process.Init) !void {
     const address = try net.IpAddress.parse("0.0.0.0", 0);
@@ -18,9 +23,13 @@ pub fn main(init: process.Init) !void {
 
     try socket.send(init.io, &dest_address, "Did this was recv???");
 
-    const mat = try tensor.Tensor(f32).init(init.gpa, &[_]usize{ 2, 2 });
+    const mat = try tensor.Tensor(f64).init(init.gpa, &[_]usize{ 2, 2 });
     defer mat.deinit();
     debug.print("{f}\n", .{mat});
+
+    const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
+    defer integ.deinit();
+    debug.print("{any}", .{integ});
 
     // // Prints to stderr, unbuffered, ignoring potential errors.
     // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});

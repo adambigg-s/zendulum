@@ -750,6 +750,7 @@ name = "render"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "crossterm",
  "env_logger",
  "euc",

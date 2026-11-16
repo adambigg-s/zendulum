@@ -66,6 +66,7 @@ pub fn Tensor(comptime T: type) type {
                 ._dim = self._dim,
                 ._shape = try self._alloc.dupe(usize, self._shape),
                 ._strides = try self._alloc.dupe(usize, self._strides),
+                ._data = try self._alloc.dupe(T, self._data),
                 ._alloc = self._alloc,
             };
         }
@@ -77,11 +78,12 @@ pub fn Tensor(comptime T: type) type {
         }
         // #endregion
 
-        // #region public
+        // #region public impl
 
         pub fn format(self: Self, writer: *std.Io.Writer) !void {
             try writer.print("Tensor<{s}> .dim = {d} .shape = {any}\n", .{ @typeName(T), self._dim, self._shape });
             try self.mFormat(writer, 0, 0);
+            try writer.writeAll("\n");
         }
 
         pub fn offset(self: Self, indices: []const usize) usize {
