@@ -32,12 +32,10 @@ impl SimulationState
 {
      fn build_pendulum(&mut self)
      {
-          self.bodies
-               .push(geometry::Cuboid::new(glam::vec3(1.0, 0.0, 0.0), glam::vec3(0.15, 0.15, 0.15)));
-          self.bodies
-               .push(geometry::Cuboid::new(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.1, 2.0, 0.1)));
-          self.bodies
-               .push(geometry::Cuboid::new(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.5, 0.5, 0.5)));
+          let cboid = geometry::Cuboid::new;
+          self.bodies.push(cboid(glam::vec3(1.0, 0.0, 0.0), glam::vec3(0.15, 0.15, 0.25)));
+          self.bodies.push(cboid(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.025, 2.0, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.1, 0.1, 0.1)));
      }
 
      fn update_pendulum(&mut self)
@@ -170,11 +168,11 @@ fn main() -> anyhow::Result<()>
 
           if window.is_key_down(minifb::Key::W)
           {
-               state.camera.pitch += 1.0;
+               state.camera.pitch -= 1.0;
           }
           if window.is_key_down(minifb::Key::S)
           {
-               state.camera.pitch -= 1.0;
+               state.camera.pitch += 1.0;
           }
           if window.is_key_down(minifb::Key::A)
           {
@@ -191,6 +189,14 @@ fn main() -> anyhow::Result<()>
           if window.is_key_down(minifb::Key::F)
           {
                state.camera.pos += glam::Vec3::Z * 0.1;
+          }
+          if window.is_key_down(minifb::Key::Up)
+          {
+               state.camera.target += glam::Vec3::Y * 0.1;
+          }
+          if window.is_key_down(minifb::Key::Down)
+          {
+               state.camera.target -= glam::Vec3::Y * 0.1;
           }
 
           match socket.recv(&mut udp_buffer)

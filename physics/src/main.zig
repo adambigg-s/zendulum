@@ -42,10 +42,25 @@ pub fn main(init: process.Init) !void {
     debug.print("{f}\n", .{mat});
 
     // const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
-    const pendulum = pend.SinglePendulum{ ._length = 2.0, ._mass = 5.0, ._gravity = 9.81 };
-    var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(pendulum, mat, 0.1);
+    const pendulum = pend.SinglePendulum{ ._length = 1.0, ._mass = 5.0, ._gravity = 9.81 };
+    var x0 = try tnsr.Tensor(f64).init(init.gpa, &[_]usize{2});
+    defer x0.deinit();
+    x0.data()[0] = math.pi / 4.0;
+    x0.data()[1] = 0.0;
+    var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(pendulum, x0, 0.1);
     defer integ.deinit();
-    _ = integ.step();
+    var target_time: f64 = 0.0;
+    for (0..10000) |_| {
+        target_time += 12.0 / 1000.0;
+        _ = try integ.stepExact(target_time);
+        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{
+            integ.state()[0],
+            integ.state()[1],
+            integ.state()[0],
+            integ.state()[1],
+        }));
+        try init.io.sleep(.fromMilliseconds(12), .awake);
+    }
     debug.print("{any}", .{integ});
 
     try socket.send(init.io, &dest_address, "SHUTDOWN");

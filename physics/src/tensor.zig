@@ -130,6 +130,16 @@ pub fn Tensor(comptime T: type) type {
                 s.* = -o;
             }
         }
+
+        pub fn norm(self: *const Self) T {
+            debug.assert(self.isVector());
+
+            var acc: T = 0;
+            for (self._data) |s| {
+                acc += s * s;
+            }
+            return @sqrt(acc);
+        }
         // #endregion
 
         // #region tensor & scalar
@@ -305,6 +315,8 @@ test "tensor neg" {
 
     debug.assert(mem.allEqual(f32, t.data(), -1.0));
 }
+
+test "tensor norm" {}
 
 test "tensor add scalar" {
     var t = try Tensor(f32).initZeros(testing.allocator, &[_]usize{ 2, 2 });
