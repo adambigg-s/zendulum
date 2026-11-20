@@ -1,50 +1,54 @@
 const std = @import("std");
-const physics = @import("physics");
-const tensor = @import("tensor.zig");
-const rk4 = @import("integrator.zig");
-const pend = @import("pendulum.zig");
+const physics = @import("root");
 
-const net = std.Io.net;
 const math = std.math;
 const process = std.process;
 const debug = std.debug;
 const mem = std.mem;
+
+const tnsr = @import("tensor.zig");
+const pend = @import("pendulum.zig");
+const rk4 = @import("integrator.zig");
 
 fn ddtFn(in: f64) f64 {
     return in * 2;
 }
 
 pub fn main(init: process.Init) !void {
-    const address = try net.IpAddress.parse("0.0.0.0", 0);
+    const address = try std.Io.net.IpAddress.parse("0.0.0.0", 0);
     var socket = try address.bind(init.io, .{
         .mode = .dgram,
         .protocol = .udp,
     });
     defer socket.close(init.io);
 
-    const dest_address = try net.IpAddress.parse("127.0.0.1", 6767);
+    const dest_address = try std.Io.net.IpAddress.parse("127.0.0.1", 6767);
 
     try socket.send(init.io, &dest_address, "Did this was recv???");
 
     var rng = std.Random.DefaultPrng.init(0);
 
     var i: i32 = 0;
+    var initt: f64 = 0.0;
     while (i < 100) {
-        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{ std.Random.float(rng.random(), f64) * math.tau, std.Random.float(rng.random(), f64), 3.0, 4.0 }));
+        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{ initt, std.Random.float(rng.random(), f64), 3.0, 4.0 }));
         i += 1;
+        initt += 0.1;
         try init.io.sleep(.fromMilliseconds(12), .awake);
     }
 
-    const mat = try tensor.Tensor(f64).init(init.gpa, &[_]usize{ 2, 2 });
+    const mat = try tnsr.Tensor(f64).init(init.gpa, &[_]usize{ 2, 2 });
     defer mat.deinit();
     debug.print("{f}\n", .{mat});
 
     // const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
-    const pendulum = pend.SinglePendulum{ .length = 2.0, .mass = 5.0, .gravity = 9.81 };
+    const pendulum = pend.SinglePendulum{ ._length = 2.0, ._mass = 5.0, ._gravity = 9.81 };
     var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(pendulum, mat, 0.1);
     defer integ.deinit();
-    _ = try integ.step();
+    _ = integ.step();
     debug.print("{any}", .{integ});
+
+    try socket.send(init.io, &dest_address, "SHUTDOWN");
 
     // // Prints to stderr, unbuffered, ignoring potential errors.
     // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});

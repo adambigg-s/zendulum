@@ -1,7 +1,7 @@
 pub const SinglePendulum = struct {
-    length: f64,
-    mass: f64,
-    gravity: f64,
+    _length: f64,
+    _mass: f64,
+    _gravity: f64,
 
     const Self = @This();
 
@@ -11,11 +11,11 @@ pub const SinglePendulum = struct {
 };
 
 pub const DoublePendulum = struct {
-    length1: f64,
-    length2: f64,
-    mass1: f64,
-    mass2: f64,
-    gravity: f64,
+    _length1: f64,
+    _length2: f64,
+    _mass1: f64,
+    _mass2: f64,
+    _gravity: f64,
 
     const Self = @This();
 
