@@ -10,6 +10,7 @@ pub fn Tensor(comptime T: type) type {
         _shape: []usize,
         _strides: []usize,
         _data: []T,
+
         _alloc: mem.Allocator,
 
         const Self = @This();
@@ -320,7 +321,14 @@ test "tensor neg" {
     debug.assert(mem.allEqual(f32, t.data(), -1.0));
 }
 
-test "tensor norm" {}
+test "tensor norm" {
+    var t = try Tensor(f32).initOnes(testing.allocator, &[_]usize{3});
+    defer t.deinit();
+
+    const norm = t.norm();
+
+    debug.assert(norm == @sqrt(3.0));
+}
 
 test "tensor add scalar" {
     var t = try Tensor(f32).initZeros(testing.allocator, &[_]usize{ 2, 2 });

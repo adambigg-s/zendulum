@@ -9,6 +9,9 @@ pub const SinglePendulum = struct {
     _length: f64,
     _mass: f64,
     _gravity: f64,
+    _damping: f64 = 0.0,
+
+    _input: f64 = 0.0,
 
     const Self = @This();
 
@@ -18,11 +21,17 @@ pub const SinglePendulum = struct {
         const theta = x0[0];
         const omega = x0[2];
 
+        const inertia = self._mass * self._length * self._length;
+
         const dtheta = omega;
-        const domega = -self._gravity / self._length * math.sin(theta);
+        var domega = -self._gravity / self._length * math.sin(theta);
+        domega -= self._damping * omega;
+        domega += self._input / inertia;
 
         dx[0] = dtheta;
+        dx[1] = 0.0;
         dx[2] = domega;
+        dx[3] = 0.0;
     }
 };
 
@@ -32,6 +41,10 @@ pub const DoublePendulum = struct {
     _mass1: f64,
     _mass2: f64,
     _gravity: f64,
+    _damp1: f64 = 0.0,
+    _damp2: f64 = 0.0,
+
+    _input: f64 = 0.0,
 
     const Self = @This();
 
@@ -56,13 +69,15 @@ pub const DoublePendulum = struct {
             -math.sin(delta_theta) * (m2 * l1 * omega1 * omega1 * math.cos(delta_theta) + m2 * l2 * omega2 * omega2),
             -self._gravity * ((m1 + m2) * math.sin(theta1) - m2 * math.sin(theta2) * math.cos(delta_theta)),
         };
-        const domega1 = (t1 + t2) / (l1 * alpha);
+        var domega1 = (t1 + t2) / (l1 * alpha);
+        domega1 -= self._damp1 * omega1;
 
         const t3, const t4 = .{
             math.sin(delta_theta) * ((m1 + m2) * l1 * omega1 * omega1 + m2 * l2 * omega2 * omega2 * math.cos(delta_theta)),
             self._gravity * ((m1 + m2) * math.sin(theta1) * math.cos(delta_theta) - (m1 + m2) * math.sin(theta2)),
         };
-        const domega2 = (t3 + t4) / (l2 * alpha);
+        var domega2 = (t3 + t4) / (l2 * alpha);
+        domega2 -= self._damp2 * omega2;
 
         dx[0] = dtheta1;
         dx[1] = dtheta2;

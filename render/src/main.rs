@@ -13,8 +13,8 @@ use euc::Target;
 use euc::buffer;
 use euc::rasterizer;
 
-const WWIDTH: usize = 800;
-const WHEIGHT: usize = 600;
+const WWIDTH: usize = 1200;
+const WHEIGHT: usize = 800;
 const SHUTDOWN: &[u8] = "SHUTDOWN".as_bytes();
 const BUFFER_SIZE: usize = u16::MAX as usize;
 const FPS: f32 = 240f32;
@@ -30,28 +30,42 @@ struct SimulationState {
 impl SimulationState {
      fn build_pendulum(&mut self) {
           let cboid = geometry::Cuboid::new;
+          let length1 = 2.0;
+          let length2 = 1.0;
           self.bodies.push(cboid(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.15, 0.15, 0.25)));
-          self.bodies.push(cboid(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.025, 2.0, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.25, 0.25, 0.25), glam::vec3(0.025, length1, 0.025)));
           self.bodies.push(cboid(glam::vec3(0.5, 0.5, 1.0), glam::vec3(0.1, 0.1, 0.1)));
 
-          self.bodies.push(cboid(glam::vec3(1.0, 0.0, 0.0), glam::vec3(1.0, 0.025, 0.025)));
-          self.bodies.push(cboid(glam::vec3(0.0, 1.0, 0.0), glam::vec3(0.025, 1.0, 0.025)));
-          self.bodies.push(cboid(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.025, 0.025, 1.0)));
+          self.bodies.push(cboid(glam::vec3(0.25, 0.25, 0.25), glam::vec3(0.025, length2, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.5, 0.5, 1.0), glam::vec3(0.1, 0.1, 0.1)));
+
+          self.bodies.push(cboid(glam::vec3(1.0, 0.0, 0.0), glam::vec3(0.5, 0.025, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.0, 1.0, 0.0), glam::vec3(0.025, 0.5, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.025, 0.025, 0.5)));
      }
 
      fn update_pendulum(&mut self) {
-          let swing = glam::Mat4::from_rotation_z(self.state.theta1 as f32);
-          let length = self.bodies[1].size.y;
-          let pivot = glam::Mat4::from_translation(glam::vec3(0.0, -length * 0.5, 0.0));
+          let swing1 = glam::Mat4::from_rotation_z(self.state.theta1 as f32);
+          let swing2 = glam::Mat4::from_rotation_z(self.state.theta2 as f32);
+          let length1 = self.bodies[1].size.y;
+          let length2 = self.bodies[3].size.y;
+          let pivot1 = glam::Mat4::from_translation(glam::vec3(0.0, -length1 * 0.5, 0.0));
 
-          self.bodies[0].transform = pivot;
+          self.bodies[0].transform = pivot1;
           self.bodies[1].transform =
-               pivot * swing * glam::Mat4::from_translation(glam::vec3(0.0, -length / 2.0, 0.0));
+               pivot1 * swing1 * glam::Mat4::from_translation(glam::vec3(0.0, -length1 / 2.0, 0.0));
           self.bodies[2].transform =
-               pivot * swing * glam::Mat4::from_translation(glam::vec3(0.0, -length, 0.0));
+               pivot1 * swing1 * glam::Mat4::from_translation(glam::vec3(0.0, -length1, 0.0));
 
-          self.bodies[3..].iter_mut().for_each(|body| {
-               body.transform = glam::Mat4::from_translation(body.size / 2.0) * pivot;
+          self.bodies[3].transform = self.bodies[2].transform
+               * swing2
+               * glam::Mat4::from_translation(glam::vec3(0.0, -length2 / 2.0, 0.0));
+          self.bodies[4].transform = self.bodies[2].transform
+               * swing2
+               * glam::Mat4::from_translation(glam::vec3(0.0, -length2, 0.0));
+
+          self.bodies.iter_mut().rev().take(3).for_each(|body| {
+               body.transform = glam::Mat4::from_translation(body.size / 2.0) * pivot1;
           });
      }
 }
@@ -87,7 +101,7 @@ impl euc::Pipeline for PendulumPipeline {
           let (nx, ny, nz) = *nor;
           let (mut r, mut g, mut b) = *col;
 
-          let shading = glam::vec3(nx, ny, nz).dot(glam::vec3(0.5, 1.0, 0.5).normalize()).clamp(0.1, 1.0);
+          let shading = glam::vec3(nx, ny, nz).dot(glam::vec3(0.5, 1.0, 0.75).normalize()).clamp(0.1, 1.0);
           r *= shading;
           g *= shading;
           b *= shading;
@@ -112,7 +126,7 @@ fn main() -> anyhow::Result<()> {
           WWIDTH,
           WHEIGHT,
           minifb::WindowOptions {
-               scale: minifb::Scale::X2,
+               scale: minifb::Scale::X1,
                ..Default::default()
           },
      )?;
@@ -220,9 +234,6 @@ fn main() -> anyhow::Result<()> {
                && let event::Event::Key(key) = event::read()?
                && key.code.is_esc()
           {
-               break;
-          }
-          if window.is_key_down(minifb::Key::Escape) {
                break;
           }
      }

@@ -5,7 +5,7 @@ const debug = std.debug;
 
 pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
     return struct {
-        _system: System,
+        _system: *System,
         _state: Tensor,
         _t: T,
         _dt: T,
@@ -15,6 +15,7 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         _k2: Tensor,
         _k3: Tensor,
         _k4: Tensor,
+
         _tmp1: Tensor,
         _tmp2: Tensor,
         _tmp3: Tensor,
@@ -23,12 +24,12 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         const Tensor = tensor.Tensor(T);
 
         const eps = 1e-12;
-        const default_tol = 1e-9;
         const min_dt = 1e-9;
+        const default_tol = 1e-9;
 
         // #region create/destroy
 
-        pub fn init(system: System, x0: Tensor, dt: T) !Self {
+        pub fn init(system: *System, x0: Tensor, dt: T) !Self {
             debug.assert(x0._dim == 1);
 
             return .{
@@ -37,7 +38,6 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
                 ._t = 0,
                 ._dt = dt,
                 ._tol = eps,
-
                 ._k1 = try x0.clone(),
                 ._k2 = try x0.clone(),
                 ._k3 = try x0.clone(),
@@ -55,7 +55,6 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
                 ._t = self._t,
                 ._dt = self._dt,
                 ._tol = self._tol,
-
                 ._k1 = try self._state.clone(),
                 ._k2 = try self._state.clone(),
                 ._k3 = try self._state.clone(),
@@ -159,3 +158,11 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         // #endregion
     };
 }
+
+test "rk4 clone" {}
+
+test "rk4 step" {}
+
+test "rk4 dynamic step" {}
+
+test "rk4 step exact" {}
