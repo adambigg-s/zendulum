@@ -5,25 +5,20 @@ use crossterm::terminal;
 #[derive(Debug, Default)]
 pub struct Setup;
 
-impl Setup
-{
-     pub fn new() -> Self
-     {
+impl Setup {
+     pub fn new() -> Self {
           init().unwrap();
           Self
      }
 }
 
-impl Drop for Setup
-{
-     fn drop(&mut self)
-     {
+impl Drop for Setup {
+     fn drop(&mut self) {
           shutdown().unwrap();
      }
 }
 
-pub fn init() -> anyhow::Result<()>
-{
+pub fn init() -> anyhow::Result<()> {
      unsafe {
           env::set_var("RUST_BACKTRACE", "full");
           env::set_var("RUST_LOG", "debug");
@@ -37,8 +32,7 @@ pub fn init() -> anyhow::Result<()>
      Ok(())
 }
 
-pub fn shutdown() -> anyhow::Result<()>
-{
+pub fn shutdown() -> anyhow::Result<()> {
      terminal::disable_raw_mode()?;
 
      log::info!("Shutdown");

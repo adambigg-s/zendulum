@@ -110,6 +110,10 @@ pub fn Tensor(comptime T: type) type {
             return self._data;
         }
 
+        pub fn set(self: *Self, vals: []const T) void {
+            @memcpy(self._data, vals);
+        }
+
         pub fn fill(self: *Self, val: T) void {
             @memset(self._data, val);
         }

@@ -15,13 +15,16 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         _k2: Tensor,
         _k3: Tensor,
         _k4: Tensor,
-        _temp: Tensor,
-        _temp2: Tensor,
+        _tmp1: Tensor,
+        _tmp2: Tensor,
+        _tmp3: Tensor,
 
         const Self = @This();
         const Tensor = tensor.Tensor(T);
 
         const eps = 1e-12;
+        const default_tol = 1e-9;
+        const min_dt = 1e-9;
 
         // #region create/destroy
 
@@ -39,8 +42,9 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
                 ._k2 = try x0.clone(),
                 ._k3 = try x0.clone(),
                 ._k4 = try x0.clone(),
-                ._temp = try x0.clone(),
-                ._temp2 = try x0.clone(),
+                ._tmp1 = try x0.clone(),
+                ._tmp2 = try x0.clone(),
+                ._tmp3 = try x0.clone(),
             };
         }
 
@@ -56,8 +60,9 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
                 ._k2 = try self._state.clone(),
                 ._k3 = try self._state.clone(),
                 ._k4 = try self._state.clone(),
-                ._temp = try self._state.clone(),
-                ._temp2 = try self._state.clone(),
+                ._tmp1 = try self._state.clone(),
+                ._tmp2 = try self._state.clone(),
+                ._tmp3 = try self._state.clone(),
             };
         }
 
@@ -67,8 +72,9 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
             self._k2.deinit();
             self._k3.deinit();
             self._k4.deinit();
-            self._temp.deinit();
-            self._temp2.deinit();
+            self._tmp1.deinit();
+            self._tmp2.deinit();
+            self._tmp3.deinit();
         }
         // #endregion
 
@@ -85,38 +91,40 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         }
 
         pub fn dynamicStep(self: *Self) !*const Tensor {
-            var oracle = try self.clone();
-            defer oracle.deinit();
-            oracle._dt = self._dt * 0.5;
+            while (true) {
+                self.rk4(&self._state, self._dt, &self._tmp2);
 
-            for (0..2) |_| {
-                _ = oracle.step();
+                self.rk4(&self._state, self._dt / 2.0, &self._tmp3);
+                self.rk4(&self._tmp3, self._dt / 2.0, &self._tmp3);
+
+                self._tmp1.subTensor(&self._tmp2, &self._tmp3);
+                const err = self._tmp1.norm();
+                if (err > self._tol and self._dt > min_dt) {
+                    self._dt = @max(self._dt * 0.7, min_dt);
+                    continue;
+                }
+
+                self._t += self._dt;
+                self._state.assign(&self._tmp3);
+                self._dt *= 1.3;
+                return &self._state;
             }
-            self.rk4(&self._state, self._dt, &self._temp2);
-
-            self._temp.subTensor(&self._temp2, &oracle._state);
-            const norm = self._temp.norm();
-
-            if (norm > self._tol) {
-                self._dt *= 0.7;
-                self._dt = @max(self._dt, self._tol);
-                return self.dynamicStep();
-            }
-
-            self._t += self._dt;
-            self._state.assign(&self._temp2);
-            self._dt *= 1.3;
-            return &self._state;
         }
 
         pub fn stepExact(self: *Self, target: T) !*const Tensor {
             while (target - self._t > eps) {
                 const rem = target - self._t;
-                if (self._dt > rem) {
+                const desired = self._dt;
+                const clamped = desired > rem;
+                if (clamped) {
                     self._dt = rem;
                 }
 
                 _ = try self.dynamicStep();
+
+                if (clamped and target - self._t <= eps) {
+                    self._dt = desired;
+                }
             }
 
             return &self._state;
@@ -126,40 +134,27 @@ pub fn Rk4Integrator(comptime T: type, comptime System: type) type {
         // #region private impl
 
         fn rk4(self: *Self, x: *const Tensor, h: T, out: *Tensor) void {
-            self._system.derivative(x._data, self._temp._data);
-            self._k1.assign(&self._temp);
+            self._system.derivative(x._data, self._k1.data());
 
-            self._temp.assign(&self._k1);
-            self._temp.mulScalar(&self._temp, h / 2.0);
-            self._temp.addTensor(&self._state, &self._temp);
-            self._system.derivative(self._temp._data, self._temp._data);
-            self._k2.assign(&self._temp);
+            self._tmp1.mulScalar(&self._k1, h / 2.0);
+            self._tmp1.addTensor(x, &self._tmp1);
+            self._system.derivative(self._tmp1._data, self._k2._data);
 
-            self._temp.assign(&self._k2);
-            self._temp.mulScalar(&self._temp, h / 2.0);
-            self._temp.addTensor(&self._state, &self._temp);
-            self._system.derivative(self._temp._data, self._temp._data);
-            self._k3.assign(&self._temp);
+            self._tmp1.mulScalar(&self._k2, h / 2.0);
+            self._tmp1.addTensor(x, &self._tmp1);
+            self._system.derivative(self._tmp1._data, self._k3._data);
 
-            self._temp.assign(&self._k3);
-            self._temp.mulScalar(&self._temp, h);
-            self._temp.addTensor(&self._state, &self._temp);
-            self._system.derivative(self._temp._data, self._temp._data);
-            self._k4.assign(&self._temp);
+            self._tmp1.mulScalar(&self._k3, h);
+            self._tmp1.addTensor(x, &self._tmp1);
+            self._system.derivative(self._tmp1._data, self._k4._data);
 
-            self._temp.assign(&self._k1);
-            self._temp.addTensor(&self._temp, &self._k4);
-            self._temp.mulScalar(&self._temp, h / 6.0);
+            self._tmp1.addTensor(&self._k1, &self._k4);
+            self._tmp1.mulScalar(&self._tmp1, h / 6.0);
+            out.addTensor(x, &self._tmp1);
 
-            self._state.addTensor(&self._state, &self._temp);
-
-            self._temp.assign(&self._k2);
-            self._temp.addTensor(&self._temp, &self._k3);
-            self._temp.mulScalar(&self._temp, h / 3.0);
-
-            self._state.addTensor(&self._state, &self._temp);
-
-            out.assign(&self._state);
+            self._tmp1.addTensor(&self._k2, &self._k3);
+            self._tmp1.mulScalar(&self._tmp1, h / 3.0);
+            out.addTensor(out, &self._tmp1);
         }
         // #endregion
     };

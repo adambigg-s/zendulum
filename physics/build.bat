@@ -1,3 +1,3 @@
 @echo on
 
-start zig build run
+start zig build run -Doptimize=ReleaseSafe

@@ -21,25 +21,25 @@ const FPS: f32 = 240f32;
 const POLL_RATE: f32 = time::Duration::from_secs(1).as_millis() as f32 / FPS;
 const BACKGROUND_COLOR: u32 = 0xffu32 << 24 | 180u32 << 16 | 180u32 << 8 | 180u32;
 
-struct SimulationState
-{
+struct SimulationState {
      state: state::State,
      camera: camera::Camera,
      bodies: Vec<geometry::Cuboid>,
 }
 
-impl SimulationState
-{
-     fn build_pendulum(&mut self)
-     {
+impl SimulationState {
+     fn build_pendulum(&mut self) {
           let cboid = geometry::Cuboid::new;
-          self.bodies.push(cboid(glam::vec3(1.0, 0.0, 0.0), glam::vec3(0.15, 0.15, 0.25)));
+          self.bodies.push(cboid(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.15, 0.15, 0.25)));
           self.bodies.push(cboid(glam::vec3(1.0, 0.5, 0.5), glam::vec3(0.025, 2.0, 0.025)));
-          self.bodies.push(cboid(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.1, 0.1, 0.1)));
+          self.bodies.push(cboid(glam::vec3(0.5, 0.5, 1.0), glam::vec3(0.1, 0.1, 0.1)));
+
+          self.bodies.push(cboid(glam::vec3(1.0, 0.0, 0.0), glam::vec3(1.0, 0.025, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.0, 1.0, 0.0), glam::vec3(0.025, 1.0, 0.025)));
+          self.bodies.push(cboid(glam::vec3(0.0, 0.0, 1.0), glam::vec3(0.025, 0.025, 1.0)));
      }
 
-     fn update_pendulum(&mut self)
-     {
+     fn update_pendulum(&mut self) {
           let swing = glam::Mat4::from_rotation_z(self.state.theta1 as f32);
           let length = self.bodies[1].size.y;
           let pivot = glam::Mat4::from_translation(glam::vec3(0.0, -length * 0.5, 0.0));
@@ -49,26 +49,27 @@ impl SimulationState
                pivot * swing * glam::Mat4::from_translation(glam::vec3(0.0, -length / 2.0, 0.0));
           self.bodies[2].transform =
                pivot * swing * glam::Mat4::from_translation(glam::vec3(0.0, -length, 0.0));
+
+          self.bodies[3..].iter_mut().for_each(|body| {
+               body.transform = glam::Mat4::from_translation(body.size / 2.0) * pivot;
+          });
      }
 }
 
-struct PendulumPipeline
-{
+struct PendulumPipeline {
      proj: glam::Mat4,
      view: glam::Mat4,
      model: glam::Mat4,
 }
 
-impl euc::Pipeline for PendulumPipeline
-{
+impl euc::Pipeline for PendulumPipeline {
      type Vertex = geometry::SimpleVertex;
 
      type VsOut = ((f32, f32, f32), (f32, f32, f32));
 
      type Pixel = u32;
 
-     fn vert(&self, vertex: &Self::Vertex) -> ([f32; 4], Self::VsOut)
-     {
+     fn vert(&self, vertex: &Self::Vertex) -> ([f32; 4], Self::VsOut) {
           let out_pos =
                self.proj * self.view * self.model * glam::vec4(vertex.pos.x, vertex.pos.y, vertex.pos.z, 1.0);
           let out_nor = (self.model * glam::vec4(vertex.nor.x, vertex.nor.y, vertex.nor.z, 0.0))
@@ -81,11 +82,10 @@ impl euc::Pipeline for PendulumPipeline
           )
      }
 
-     fn frag(&self, vs_out: &Self::VsOut) -> Self::Pixel
-     {
+     fn frag(&self, vs_out: &Self::VsOut) -> Self::Pixel {
           let (col, nor) = vs_out;
-          let (mut r, mut g, mut b) = *col;
           let (nx, ny, nz) = *nor;
+          let (mut r, mut g, mut b) = *col;
 
           let shading = glam::vec3(nx, ny, nz).dot(glam::vec3(0.5, 1.0, 0.5).normalize()).clamp(0.1, 1.0);
           r *= shading;
@@ -99,8 +99,7 @@ impl euc::Pipeline for PendulumPipeline
      }
 }
 
-fn main() -> anyhow::Result<()>
-{
+fn main() -> anyhow::Result<()> {
      let __setup = config::Setup::new();
 
      let mut udp_buffer = [0u8; BUFFER_SIZE];
@@ -113,7 +112,7 @@ fn main() -> anyhow::Result<()>
           WWIDTH,
           WHEIGHT,
           minifb::WindowOptions {
-               scale: minifb::Scale::X1,
+               scale: minifb::Scale::X2,
                ..Default::default()
           },
      )?;
@@ -143,8 +142,7 @@ fn main() -> anyhow::Result<()>
      };
      state.build_pendulum();
 
-     loop
-     {
+     loop {
           color.clear(BACKGROUND_COLOR);
           depth.clear(1.0f32);
 
@@ -166,68 +164,52 @@ fn main() -> anyhow::Result<()>
 
           window.update_with_buffer(color.as_ref(), color.size()[0], color.size()[1])?;
 
-          if window.is_key_down(minifb::Key::W)
-          {
+          if window.is_key_down(minifb::Key::W) {
                state.camera.pitch -= 1.0;
           }
-          if window.is_key_down(minifb::Key::S)
-          {
+          if window.is_key_down(minifb::Key::S) {
                state.camera.pitch += 1.0;
           }
-          if window.is_key_down(minifb::Key::A)
-          {
+          if window.is_key_down(minifb::Key::A) {
                state.camera.yaw -= 1.0;
           }
-          if window.is_key_down(minifb::Key::D)
-          {
+          if window.is_key_down(minifb::Key::D) {
                state.camera.yaw += 1.0;
           }
-          if window.is_key_down(minifb::Key::R)
-          {
+          if window.is_key_down(minifb::Key::R) {
                state.camera.pos -= glam::Vec3::Z * 0.1;
           }
-          if window.is_key_down(minifb::Key::F)
-          {
+          if window.is_key_down(minifb::Key::F) {
                state.camera.pos += glam::Vec3::Z * 0.1;
           }
-          if window.is_key_down(minifb::Key::Up)
-          {
+          if window.is_key_down(minifb::Key::Up) {
                state.camera.target += glam::Vec3::Y * 0.1;
           }
-          if window.is_key_down(minifb::Key::Down)
-          {
+          if window.is_key_down(minifb::Key::Down) {
                state.camera.target -= glam::Vec3::Y * 0.1;
           }
 
-          match socket.recv(&mut udp_buffer)
-          {
-               | Ok(len) =>
-               {
-                    let recv = &udp_buffer[0 .. len];
-                    if recv == SHUTDOWN
-                    {
+          match socket.recv(&mut udp_buffer) {
+               | Ok(len) => {
+                    let recv = &udp_buffer[0..len];
+                    if recv == SHUTDOWN {
                          break;
                     }
 
-                    if let Ok(string) = str::from_utf8(recv)
-                    {
+                    if let Ok(string) = str::from_utf8(recv) {
                          println!("Recieved this stuff: {:?}\nAs string: {}", recv, string)
                     }
 
-                    state.state = match state::State::parse_bytes(recv)
-                    {
+                    state.state = match state::State::parse_bytes(recv) {
                          | Ok(state) => state,
-                         | Err(err) =>
-                         {
+                         | Err(err) => {
                               log::error!("{}", err);
                               state.state
                          }
                     };
                }
-               | Err(err) =>
-               {
-                    if err.kind() != io::ErrorKind::WouldBlock && err.kind() != io::ErrorKind::TimedOut
-                    {
+               | Err(err) => {
+                    if err.kind() != io::ErrorKind::WouldBlock && err.kind() != io::ErrorKind::TimedOut {
                          log::error!("I/O error: {}", err);
                          return Err(err.into());
                     }
@@ -240,8 +222,7 @@ fn main() -> anyhow::Result<()>
           {
                break;
           }
-          if window.is_key_down(minifb::Key::Escape)
-          {
+          if window.is_key_down(minifb::Key::Escape) {
                break;
           }
      }

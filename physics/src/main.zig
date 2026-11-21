@@ -1,132 +1,65 @@
 const std = @import("std");
-const physics = @import("root");
+
+const tnsr = @import("tensor.zig");
+const pend = @import("pendulum.zig");
+const rk4 = @import("integrator.zig");
 
 const math = std.math;
 const process = std.process;
 const debug = std.debug;
 const mem = std.mem;
 
-const tnsr = @import("tensor.zig");
-const pend = @import("pendulum.zig");
-const rk4 = @import("integrator.zig");
-
-fn ddtFn(in: f64) f64 {
-    return in * 2;
-}
+const step: f64 = 1.0 / 120.0;
+const step_ns: i96 = @intFromFloat(step * @as(f64, std.time.ns_per_s));
 
 pub fn main(init: process.Init) !void {
-    const address = try std.Io.net.IpAddress.parse("0.0.0.0", 0);
-    var socket = try address.bind(init.io, .{
+    const addr = try std.Io.net.IpAddress.parse("0.0.0.0", 0);
+    var socket = try addr.bind(init.io, .{
         .mode = .dgram,
         .protocol = .udp,
     });
     defer socket.close(init.io);
+    const dest_addr = try std.Io.net.IpAddress.parse("127.0.0.1", 6767);
 
-    const dest_address = try std.Io.net.IpAddress.parse("127.0.0.1", 6767);
-
-    try socket.send(init.io, &dest_address, "Did this was recv???");
-
-    var rng = std.Random.DefaultPrng.init(0);
-
-    var i: i32 = 0;
-    var initt: f64 = 0.0;
-    while (i < 100) {
-        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{ initt, std.Random.float(rng.random(), f64), 3.0, 4.0 }));
-        i += 1;
-        initt += 0.1;
-        try init.io.sleep(.fromMilliseconds(12), .awake);
-    }
-
-    const mat = try tnsr.Tensor(f64).init(init.gpa, &[_]usize{ 2, 2 });
-    defer mat.deinit();
-    debug.print("{f}\n", .{mat});
-
-    // const integ = try rk4.Rk4Integrator(f64).init(mat, 0.01, ddtFn);
-    const pendulum = pend.SinglePendulum{ ._length = 1.0, ._mass = 5.0, ._gravity = 9.81 };
-    var x0 = try tnsr.Tensor(f64).init(init.gpa, &[_]usize{2});
+    // const system = pend.SinglePendulum{ ._length = 1.0, ._mass = 5.0, ._gravity = 9.81 };
+    const system = pend.DoublePendulum{
+        ._length1 = 1.0,
+        ._length2 = 1.0,
+        ._mass1 = 5.0,
+        ._mass2 = 2.5,
+        ._gravity = 9.81,
+    };
+    var x0 = try tnsr.Tensor(f64).init(init.gpa, &[_]usize{4});
     defer x0.deinit();
-    x0.data()[0] = math.pi / 4.0;
-    x0.data()[1] = 0.0;
-    var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(pendulum, x0, 0.1);
+    x0.set(&[_]f64{ math.pi / 4.0, 0.0, 0.0, 0.0 });
+
+    // var integ = try rk4.Rk4Integrator(f64, pend.SinglePendulum).init(system, x0, step);
+    var integ = try rk4.Rk4Integrator(f64, pend.DoublePendulum).init(system, x0, step);
     defer integ.deinit();
+    integ._tol = 1e-9;
+
     var target_time: f64 = 0.0;
-    for (0..10000) |_| {
-        target_time += 12.0 / 1000.0;
+    var start = std.Io.Clock.Timestamp.now(init.io, .awake);
+    var iter: i96 = 0;
+    while (target_time < 10.0) {
+        target_time += step;
+        iter += 1;
         _ = try integ.stepExact(target_time);
-        try socket.send(init.io, &dest_address, mem.asBytes(&[_]f64{
+
+        try socket.send(init.io, &dest_addr, mem.asBytes(&[_]f64{
             integ.state()[0],
             integ.state()[1],
-            integ.state()[0],
-            integ.state()[1],
+            integ.state()[2],
+            integ.state()[3],
         }));
-        try init.io.sleep(.fromMilliseconds(12), .awake);
+
+        const deadline_ns = step_ns * iter;
+        const elapsed = start.durationTo(.now(init.io, .awake));
+        const diff = deadline_ns - elapsed.raw.nanoseconds;
+        if (diff > 0) {
+            try init.io.sleep(.fromNanoseconds(diff), .awake);
+        }
     }
-    debug.print("{any}", .{integ});
 
-    try socket.send(init.io, &dest_address, "SHUTDOWN");
-
-    // // Prints to stderr, unbuffered, ignoring potential errors.
-    // std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // // This is appropriate for anything that lives as long as the process.
-    // const arena: std.mem.Allocator = init.arena.allocator();
-
-    // // Accessing command line arguments:
-    // const args = try init.minimal.args.toSlice(arena);
-    // for (args) |arg| {
-    //     std.log.info("arg: {s}", .{arg});
-    // }
-
-    // // In order to do I/O operations need an `Io` instance.
-    // const io = init.io;
-
-    // // Stdout is for the actual output of your application, for example if you
-    // // are implementing gzip, then only the compressed bytes should be sent to
-    // // stdout, not any debugging messages.
-    // var stdout_buffer: [1024]u8 = undefined;
-    // var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    // const stdout_writer = &stdout_file_writer.interface;
-
-    // try physics.printAnotherMessage(stdout_writer);
-
-    // try stdout_writer.flush(); // Don't forget to flush!
+    try socket.send(init.io, &dest_addr, "Simulation done");
 }
-
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-// test "fuzz example" {
-//     try std.testing.fuzz({}, testOne, .{});
-// }
-
-// fn testOne(context: void, smith: *std.testing.Smith) !void {
-//     _ = context;
-//     // Try command `zig build test --fuzz -Doptimize=ReleaseFast` to see if it manages to fail this test case!
-
-//     const gpa = std.testing.allocator;
-//     var list: std.ArrayList(u8) = .empty;
-//     defer list.deinit(gpa);
-//     while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
-//         .add_data => {
-//             const slice = try list.addManyAsSlice(gpa, smith.value(u4));
-//             smith.bytes(slice);
-//         },
-//         .dup_data => {
-//             if (list.items.len == 0) continue;
-//             if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
-//             const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
-//             const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
-//             try list.appendSlice(gpa, list.items[off..][0..len]);
-//             try std.testing.expectEqualSlices(
-//                 u8,
-//                 list.items[off..][0..len],
-//                 list.items[list.items.len - len ..],
-//             );
-//         },
-//     };
-// }

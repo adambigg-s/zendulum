@@ -1,4 +1,4 @@
-pub const State = struct {
+pub const State = packed struct {
     theta1: f64,
     theta2: f64,
     dtheta1: f64,
